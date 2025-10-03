@@ -5,20 +5,27 @@ import CarCard from "../components/CarCard";
 
 export default function Home() {
   const [cars, setCars] = useState([]);
+  const [filters, setFilters] = useState({
+    query: "",
+    price: "",
+    year: "",
+    location: "",
+    mileage: "",
+  });
+
+  const handleInputChange = (field, value) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSearch = async () => {
-    // TODO: connect to backend API
-    setCars([
-      {
-        id: 1,
-        title: "2019 Ford Fusion",
-        year: 2019,
-        mileage: 36000,
-        price: 17000,
-        image: "https://via.placeholder.com/300x200.png?text=Ford+Fusion",
-        url: "https://cars.com",
-      },
-    ]);
+    try {
+      const params = new URLSearchParams(filters).toString();
+      const res = await fetch(`http://localhost:5000/api/cars/search?${params}`);
+      const data = await res.json();
+      setCars(data);
+    } catch (err) {
+      console.error("Search failed:", err);
+    }
   };
 
   return (
@@ -46,7 +53,9 @@ export default function Home() {
           <div className="flex gap-2 mb-4">
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search (e.g. Toyota Camry)"
+              value={filters.query}
+              onChange={(e) => handleInputChange("query", e.target.value)}
               className="flex-1 border rounded-xl px-4 py-2 focus:outline-none"
             />
             <button
@@ -60,17 +69,52 @@ export default function Home() {
 
           {/* Filters */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-2 text-gray-500">
-              <DollarSign size={18} /> Price
+            {/* Price */}
+            <div className="flex items-center gap-2 border rounded-xl px-3 py-2">
+              <DollarSign size={18} className="text-gray-500" />
+              <input
+                type="number"
+                placeholder="Max Price"
+                value={filters.price}
+                onChange={(e) => handleInputChange("price", e.target.value)}
+                className="w-full outline-none"
+              />
             </div>
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-2 text-gray-500">
-              <Calendar size={18} /> Year
+
+            {/* Year */}
+            <div className="flex items-center gap-2 border rounded-xl px-3 py-2">
+              <Calendar size={18} className="text-gray-500" />
+              <input
+                type="number"
+                placeholder="Min Year"
+                value={filters.year}
+                onChange={(e) => handleInputChange("year", e.target.value)}
+                className="w-full outline-none"
+              />
             </div>
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-2 text-gray-500">
-              <MapPin size={18} /> Location
+
+            {/* Location */}
+            <div className="flex items-center gap-2 border rounded-xl px-3 py-2">
+              <MapPin size={18} className="text-gray-500" />
+              <input
+                type="text"
+                placeholder="Location"
+                value={filters.location}
+                onChange={(e) => handleInputChange("location", e.target.value)}
+                className="w-full outline-none"
+              />
             </div>
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-2 text-gray-500">
-              <Gauge size={18} /> Mileage
+
+            {/* Mileage */}
+            <div className="flex items-center gap-2 border rounded-xl px-3 py-2">
+              <Gauge size={18} className="text-gray-500" />
+              <input
+                type="number"
+                placeholder="Max Mileage"
+                value={filters.mileage}
+                onChange={(e) => handleInputChange("mileage", e.target.value)}
+                className="w-full outline-none"
+              />
             </div>
           </div>
         </div>
@@ -90,16 +134,6 @@ export default function Home() {
           </div>
         )}
       </section>
-
-      {/* Footer */}
-      <footer className="flex justify-between items-center px-8 py-4 border-t text-gray-500 text-sm">
-        <span>©2025 CarFinder</span>
-        <div className="space-x-4">
-          <a href="#">About</a>
-          <a href="#">Privacy</a>
-          <a href="#">Terms</a>
-        </div>
-      </footer>
     </div>
   );
 }
