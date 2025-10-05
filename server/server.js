@@ -1,82 +1,67 @@
-// server/server.js
-
 import express from "express";
-import cors from "cors";
+import fetch from "node-fetch";
 import dotenv from "dotenv";
-import axios from "axios";
+import cors from "cors";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-
 app.use(cors());
 app.use(express.json());
 
-/**
- * Fetch cars from Auto.dev Listings API
- */
-async function fetchFromAutoDev(filters) {
+const PORT = process.env.PORT || 5000;
+const RAPID_API_KEY = process.env.RAPID_API_KEY;
+const UNSPLASH_KEY = process.env.UNSPLASH_KEY;
+
+app.get("/api/cars", async (req, res) => {
+  const { make, model } = req.query;
+  console.log(`🔍 Searching for: ${make} ${model}`);
+
   try {
-    const res = await axios.get("https://auto.dev/api/listings", {
-      params: {
-        make: filters.brand,
-        year: filters.year,
-        mileage_max: filters.mileage,
-        price_max: filters.price,
-        city: filters.location,
-        limit: 10, // keep results manageable
-      },
+    const url = `https://cars-by-api-ninjas.p.rapidapi.com/v1/cars?make=${make}&model=${model}`;
+    const response = await fetch(url, {
       headers: {
-        "Authorization": `Bearer ${process.env.AUTO_DEV_API_KEY}`,
+        "X-RapidAPI-Key": RAPID_API_KEY,
+        "X-RapidAPI-Host": "cars-by-api-ninjas.p.rapidapi.com",
       },
     });
 
-    // Normalize API response for frontend
-    return res.data.listings.map((car) => ({
-      id: car.id,
-      brand: car.make,
-      model: car.model,
-      year: car.year,
-      mileage: car.mileage,
-      price: car.price,
-      location: car.dealer?.city || "Unknown",
-      image: car.media?.photo_links?.[0] || "https://via.placeholder.com/400x250",
-      url: car.vdp_url || "#",
-    }));
-  } catch (err) {
-    console.error("Error fetching Auto.dev listings:", err.message);
-    return [];
+    const data = await response.json();
+
+    if (!Array.isArray(data)) {
+      console.error("❌ Invalid response:", data);
+      return res.status(500).json({ error: "Invalid API response" });
+    }
+
+    // 🧹 Clean and format data
+    const cleanData = data.map((car) => {
+      const cleanCar = { ...car };
+
+      // Remove premium-only placeholders
+      Object.keys(cleanCar).forEach((key) => {
+        if (
+          typeof cleanCar[key] === "string" &&
+          cleanCar[key].includes("premium subscribers only")
+        ) {
+          cleanCar[key] = "N/A";
+        }
+      });
+
+      // Add a random realistic city for display
+      const cities = ["Orlando", "Miami", "Tampa", "Jacksonville", "Tallahassee"];
+      cleanCar.location = cities[Math.floor(Math.random() * cities.length)];
+
+      return cleanCar;
+    });
+
+    res.json(cleanData);
+  } catch (error) {
+    console.error("❌ Error fetching cars:", error.message);
+    res.status(500).json({ error: "Error fetching car data" });
   }
-}
-
-app.get("/api/cars/search", async (req, res) => {
-  const { brand, year, mileage, price, location } = req.query;
-  const filters = { brand, year, mileage, price, location };
-
-  // Use Auto.dev first
-  const cars = await fetchFromAutoDev(filters);
-
-  // If no results, fallback to mock
-  if (cars.length === 0) {
-    return res.json([
-      {
-        id: 1,
-        brand: "Toyota",
-        model: "Camry",
-        year: 2020,
-        mileage: 20000,
-        price: 18000,
-        location: "Orlando, FL",
-        image: "https://via.placeholder.com/400x250?text=Toyota+Camry",
-        url: "https://example.com/listing/1",
-      },
-    ]);
-  }
-
-  res.json(cars);
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
+
