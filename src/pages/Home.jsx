@@ -6,29 +6,36 @@ import CarCard from "../components/CarCard";
 export default function Home() {
   const [cars, setCars] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({
-    price: "",
-    year: "",
-    mileage: "",
-  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSearch = async () => {
-  try {
-    const [make, model] = searchTerm.split(" ");
-    const params = new URLSearchParams({
-      make: make || "",
-      model: model || "",
-      ...filters,
-    }).toString();
+    if (!searchTerm.trim()) {
+      setError("Please enter a car make or model");
+      return;
+    }
 
-    const res = await fetch(`http://localhost:5000/api/cars?${params}`);
-    const data = await res.json();
-    setCars(data);
-  } catch (err) {
-    console.error("Search failed:", err);
-  }
-};
+    setLoading(true);
+    setError("");
 
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/cars?query=${encodeURIComponent(searchTerm)}`
+      );
+      const data = await res.json();
+
+      if (!Array.isArray(data) || data.length === 0) {
+        setError("No cars found.");
+      }
+
+      setCars(data);
+    } catch (err) {
+      console.error("Search failed:", err);
+      setError("Something went wrong. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -68,63 +75,30 @@ export default function Home() {
               Search
             </button>
           </div>
-
-          {/* Filters */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {/* Price */}
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-2">
-              <DollarSign size={18} className="text-gray-500" />
-              <input
-                type="number"
-                placeholder="Max Price"
-                value={filters.price}
-                onChange={(e) =>
-                  setFilters((prev) => ({ ...prev, price: e.target.value }))
-                }
-                className="w-full outline-none"
-              />
-            </div>
-
-            {/* Year */}
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-2">
-              <Calendar size={18} className="text-gray-500" />
-              <input
-                type="number"
-                placeholder="Min Year"
-                value={filters.year}
-                onChange={(e) =>
-                  setFilters((prev) => ({ ...prev, year: e.target.value }))
-                }
-                className="w-full outline-none"
-              />
-            </div>
-
-            {/* Mileage */}
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-2">
-              <Gauge size={18} className="text-gray-500" />
-              <input
-                type="number"
-                placeholder="Max Mileage"
-                value={filters.mileage}
-                onChange={(e) =>
-                  setFilters((prev) => ({ ...prev, mileage: e.target.value }))
-                }
-                className="w-full outline-none"
-              />
-            </div>
-          </div>
         </div>
       </section>
 
       {/* Results */}
       <section className="max-w-5xl mx-auto w-full px-4 mt-10 flex-1">
-        {cars.length > 0 ? (
+        {loading && (
+          <div className="text-center text-gray-500">Loading results...</div>
+        )}
+
+        {error && !loading && (
+          <div className="bg-red-100 text-red-600 text-center py-4 rounded-xl">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && cars.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {cars.map((car) => (
-              <CarCard key={car.id} car={car} />
+            {cars.map((car, index) => (
+              <CarCard key={index} car={car} />
             ))}
           </div>
-        ) : (
+        )}
+
+        {!loading && !error && cars.length === 0 && (
           <div className="bg-gray-100 text-gray-500 text-center py-12 rounded-xl">
             Your results will appear here after you search!
           </div>

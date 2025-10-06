@@ -1,67 +1,80 @@
 import express from "express";
-import fetch from "node-fetch";
 import dotenv from "dotenv";
+import fetch from "node-fetch";
 import cors from "cors";
 
 dotenv.config();
-
 const app = express();
 app.use(cors());
-app.use(express.json());
-
-const PORT = process.env.PORT || 5000;
-const RAPID_API_KEY = process.env.RAPID_API_KEY;
-const UNSPLASH_KEY = process.env.UNSPLASH_KEY;
+const PORT = 5000;
 
 app.get("/api/cars", async (req, res) => {
-  const { make, model } = req.query;
-  console.log(`🔍 Searching for: ${make} ${model}`);
+  const query = req.query.query?.toLowerCase() || "";
+  console.log(`🔍 Searching for: ${query}`);
+
+  if (!query) return res.status(400).json({ error: "Missing query parameter" });
 
   try {
-    const url = `https://cars-by-api-ninjas.p.rapidapi.com/v1/cars?make=${make}&model=${model}`;
-    const response = await fetch(url, {
+    // --- Fetch cars by make or model ---
+    const carUrl = `https://cars-by-api-ninjas.p.rapidapi.com/v1/cars?make=${encodeURIComponent(
+      query
+    )}`;
+    const carResponse = await fetch(carUrl, {
+      method: "GET",
       headers: {
-        "X-RapidAPI-Key": RAPID_API_KEY,
+        "X-RapidAPI-Key": process.env.RAPID_API_KEY,
         "X-RapidAPI-Host": "cars-by-api-ninjas.p.rapidapi.com",
       },
     });
 
-    const data = await response.json();
-
-    if (!Array.isArray(data)) {
-      console.error("❌ Invalid response:", data);
-      return res.status(500).json({ error: "Invalid API response" });
+    if (!carResponse.ok) {
+      const text = await carResponse.text();
+      throw new Error(`Car API error: ${text}`);
     }
 
-    // 🧹 Clean and format data
-    const cleanData = data.map((car) => {
-      const cleanCar = { ...car };
+    const cars = await carResponse.json();
 
-      // Remove premium-only placeholders
-      Object.keys(cleanCar).forEach((key) => {
-        if (
-          typeof cleanCar[key] === "string" &&
-          cleanCar[key].includes("premium subscribers only")
-        ) {
-          cleanCar[key] = "N/A";
+    // If empty result, fallback to mock data
+    if (!cars.length) {
+      console.log("⚠️ No cars found, returning mock data.");
+      return res.json([]);
+    }
+
+    // --- Fetch image for each car using Unsplash ---
+    const listings = await Promise.all(
+      cars.slice(0, 5).map(async (car) => {
+        const searchTerm = `${car.make} ${car.model}`;
+        const unsplashUrl = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
+          searchTerm
+        )}&client_id=${process.env.UNSPLASH_ACCESS_KEY}&per_page=1`;
+
+        try {
+          const imgResponse = await fetch(unsplashUrl);
+          const imgData = await imgResponse.json();
+          const imageUrl = imgData.results?.[0]?.urls?.small || null;
+
+          return {
+            make: car.make,
+            model: car.model,
+            year: car.year,
+            class: car.class,
+            drive: car.drive,
+            fuel_type: car.fuel_type,
+            transmission: car.transmission,
+            image: imageUrl,
+          };
+        } catch (err) {
+          console.error(`❌ Image fetch error for ${searchTerm}:`, err);
+          return { ...car, image: null };
         }
-      });
+      })
+    );
 
-      // Add a random realistic city for display
-      const cities = ["Orlando", "Miami", "Tampa", "Jacksonville", "Tallahassee"];
-      cleanCar.location = cities[Math.floor(Math.random() * cities.length)];
-
-      return cleanCar;
-    });
-
-    res.json(cleanData);
-  } catch (error) {
-    console.error("❌ Error fetching cars:", error.message);
-    res.status(500).json({ error: "Error fetching car data" });
+    res.json(listings);
+  } catch (err) {
+    console.error("❌ Server error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-});
-
+app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
